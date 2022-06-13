@@ -1,14 +1,17 @@
 [package]
 name = "zfs-autosnaprs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Micha Glave <micha@glave.net>"]
 edition = "2018"
 description = "zfs-auto-snapshot like tool written in Rust."
 license = "MIT"
 
 [dependencies]
-simplelog = "0.7.4"
-structopt = "0.3.7"
-log = "0.4.8"
-derive_builder = "0.9.0"
-chrono = "0.4.10"
+simplelog = "0.12.0"
+clap = { version = "3.1.18", features = ["derive"] }
+log = "0.4.17"
+chrono = "0.4.19"
+
+[[bin]]
+name = "zfs-autosnaprs"
+path = "src/main.rs"
