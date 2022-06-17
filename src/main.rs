@@ -12,7 +12,7 @@ use log::{debug, error};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[clap(version, about, long_about = None)]
 struct Opt {
     /// Prints info messages.
     #[clap(short, long)]
@@ -23,12 +23,11 @@ struct Opt {
     pub debug: bool,
 
     /// Label of snapshot usually 'hourly', 'daily', or 'monthly'.
-    #[clap(name = "LAB", short, long = "label")]
     pub label: String,
 
     /// Min size in Kilo-Byte.
-    #[clap(short = 'm', long)]
-    pub min_size: Option<usize>,
+    #[clap(short = 'm', long, default_value = "0")]
+    pub min_size: usize,
 
     /// Keeps NUM recent snapshots and destroy older snapshots.
     #[clap(name = "NUM", short, long = "keep", default_value = "8")]
@@ -38,8 +37,8 @@ struct Opt {
     #[clap(short, long, default_value = "zfs-snapshot")]
     pub prefix: String,
 
-    /// Prints actions without actually doing anything.
-    #[clap(short = 'n', long = "dry-run")]
+    /// Pretending, not really changing anything.
+    #[clap(short = 'n', long)]
     pub dry_run: bool,
 }
 
@@ -72,7 +71,7 @@ fn main() {
         .iter()
         .filter(|f| f.snap)
     {
-        if opt.min_size.is_some() && !zfs.snapshot_needed(opt.min_size.unwrap(), fs, &snapshots) {
+        if !zfs.next_snapshot_needed(opt.min_size, fs, &snapshots) {
             debug!("skip FS: {:?}", fs);
             continue;
         }

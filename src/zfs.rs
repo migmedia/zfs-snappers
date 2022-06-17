@@ -30,7 +30,7 @@ pub enum FsType {
 }
 
 impl FsType {
-    fn to_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             FsType::Snapshot => "snapshot",
             FsType::Filesystem => "filesystem",
@@ -40,7 +40,7 @@ impl FsType {
 
 impl fmt::Display for FsType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -54,7 +54,7 @@ pub struct Zfs {
     option_name: String,
     label: String,
     history: usize,
-    date: String,
+    timestamp: String,
 }
 
 impl Zfs {
@@ -71,12 +71,34 @@ impl Zfs {
             option_name: String::from("com.sun:auto-snapshot"),
             label: label.into(),
             history,
-            date: date.into(),
+            timestamp: date.into(),
         }
     }
 
     fn cmd(&self) -> process::Command {
         process::Command::new(&self.executable)
+    }
+
+    fn sname(&self, name: &str, timestamp: Option<&str>) -> String {
+        let Self { prefix, label, .. } = self;
+        let ts = match timestamp {
+            None => self.timestamp.clone(),
+            Some(s) => s.into(),
+        };
+        format!("{name}@{prefix}_{label}-{ts}")
+    }
+
+    fn filter_snaps<'a>(&self, fs: &FS, snaps: &'a [FS]) -> Vec<&'a FS> {
+        let name = self.sname(&fs.name, Some(""));
+        // filter snaps-list fitting to fs.
+        let mut snaps: Vec<&FS> = snaps
+            .iter()
+            .filter(|&sn| sn.name.strip_prefix(name.as_str()).is_some())
+            .collect();
+        // Sort descending by FS.date
+        debug!("filter snapshots for '{}', found {}", name, snaps.len());
+        snaps.sort_unstable_by(|&a, &b| a.date.cmp(&b.date));
+        snaps
     }
 
     /// Returns a list of snapshots to destroy.
@@ -87,21 +109,20 @@ impl Zfs {
     /// * snaps - List of snapshots, to filter and return.
     ///
     pub fn find_expendable_snapshots<'a>(&'a self, fs: &FS, snaps: &'a [FS]) -> Vec<&'a FS> {
-        let snaps = Self::filter_snaps(fs, snaps);
-        // skip amount to hold, return the rest.
-        snaps.iter().skip(self.history).copied().collect()
+        let snaps = self.filter_snaps(fs, snaps);
+        if snaps.len() > self.history {
+            snaps
+                .iter()
+                .take(snaps.len() - self.history)
+                .copied()
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
-    fn filter_snaps<'a>(fs: &FS, snaps: &'a [FS]) -> Vec<&'a FS> {
-        // filter snaps-list fitting to fs.
-        let mut snaps: Vec<&FS> = snaps.iter().filter(|&sn| sn.fs == fs.name).collect();
-        // Sort descending by FS.date
-        snaps.sort_unstable_by(|&a, &b| b.date.cmp(&a.date));
-        snaps
-    }
-
-    pub fn snapshot_needed<'a>(&'a self, min_size: usize, fs: &FS, snaps: &'a [FS]) -> bool {
-        let snaps = Self::filter_snaps(fs, snaps);
+    pub fn next_snapshot_needed<'a>(&'a self, min_size: usize, fs: &FS, snaps: &'a [FS]) -> bool {
+        let snaps = self.filter_snaps(fs, snaps);
         match snaps.last() {
             Some(&fs) => fs.written > min_size,
             None => true,
@@ -125,7 +146,7 @@ impl Zfs {
                 suf = &self.label
             ),
             "-t",
-            fst.to_str(),
+            fst.as_str(),
         ];
         info!("zfs {}", args.join(" "));
         let ret = self
@@ -149,14 +170,8 @@ impl Zfs {
     /// * fs - filesystem to snap over
     ///
     pub fn create_snapshot(&self, fs: &FS) -> Result<(), std::io::Error> {
-        let FS { name, .. } = fs;
-        let Self {
-            prefix,
-            label,
-            date,
-            ..
-        } = self;
-        let args = &["snapshot", &format!("{name}@{prefix}-{label}_{date}")];
+        let name = self.sname(&fs.name, None);
+        let args = &["snapshot", name.as_str()];
         info!("zfs {}", args.join(" "));
         if !self.pretend {
             let output = self.cmd().args(args).output()?;
@@ -242,46 +257,70 @@ impl fmt::Display for ZfsError {
     }
 }
 
-#[test]
-fn test_str2fs() {
-    let fs = str2fs("tank\t24576\t-\t-\t1608216521", FsType::Filesystem);
-    assert_eq!(fs.name, String::from("tank"));
-    assert_eq!(fs.written, 24576usize);
-    assert!(!fs.snap);
-    let fs = str2fs("tank\t24576\t-\ttrue\t1608216521", FsType::Filesystem);
-    assert!(fs.snap);
-    let fs = str2fs("tank\t24576\ttrue\tfalse\t1608216521", FsType::Filesystem);
-    assert!(fs.snap);
-    let fs = str2fs("tank\t24576\ttrue\ttrue\t1608216521", FsType::Filesystem);
-    assert!(fs.snap);
-}
+mod should {
+    use super::*;
 
-#[test]
-fn test_zfs_find_expendable_snapshots() {
-    let zfs = Zfs::new(true, "zfs-snapshot", "weekly", 1usize, "2019-12-30_1807");
-    let fs_snaps = vec![
-        str2fs(
-            "tank/SRV/www@zfs-snapshot-weekly_2019-12-30_1207\t23234\t-\t-\t1608216421",
-            FsType::Snapshot,
-        ),
-        str2fs(
-            "tank/SRV/www@zfs-snapshot-weekly_2019-12-30_1907\t245643\t-\t-\t1608216921",
-            FsType::Snapshot,
-        ),
-        str2fs(
-            "tank/SRV/www@zfs-snapshot-weekly_2019-12-30_1607\t12340\t-\t-\t1608216821",
-            FsType::Snapshot,
-        ),
-    ];
-    let fs_orig = str2fs("tank/SRV/www\t245643\t-\t-\t121212112", FsType::Filesystem);
-    let expendables = zfs.find_expendable_snapshots(&fs_orig, &fs_snaps);
+    #[test]
+    fn parse_zfs_output() {
+        let fs = str2fs("tank\t24576\t-\t-\t1608216521", FsType::Filesystem);
+        assert_eq!(fs.name, String::from("tank"));
+        assert_eq!(fs.written, 24576usize);
+        assert!(!fs.snap);
+        let fs = str2fs("tank\t24576\t-\ttrue\t1608216521", FsType::Filesystem);
+        assert!(fs.snap);
+        assert_eq!(
+            fs.date,
+            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(1608216521, 0), Utc)
+        );
+        let fs = str2fs("tank\t24576\ttrue\tfalse\t1608216521", FsType::Filesystem);
+        assert!(fs.snap);
+        let fs = str2fs("tank\t24576\ttrue\ttrue\t1608216521", FsType::Filesystem);
+        assert!(fs.snap);
+    }
 
-    assert_eq!(
-        expendables.first().unwrap().name,
-        "tank/SRV/www@zfs-snapshot-weekly_2019-12-30_1607"
-    );
-    assert_eq!(
-        expendables.get(1).unwrap().name,
-        "tank/SRV/www@zfs-snapshot-weekly_2019-12-30_1207"
-    );
+    #[test]
+    fn find_expendable_snapshots_enough() {
+        let zfs = Zfs::new(true, "zfs-snapshot", "weekly", 1usize, "2019-12-30_1807");
+        let fs_snaps = get_snaps();
+        let fs_orig = str2fs("tank/SRV/www\t245643\t-\t-\t121212112", FsType::Filesystem);
+        let expendables = zfs.find_expendable_snapshots(&fs_orig, &fs_snaps);
+
+        assert_eq!(expendables.len(), 2);
+        assert_eq!(
+            expendables.first().unwrap().name,
+            "tank/SRV/www@zfs-snapshot_weekly-2019-12-30_1207"
+        );
+        assert_eq!(
+            expendables.get(1).unwrap().name,
+            "tank/SRV/www@zfs-snapshot_weekly-2019-12-30_1607"
+        );
+    }
+
+    #[test]
+    fn find_expendable_snapshots_to_less() {
+        let zfs = Zfs::new(true, "zfs-snapshot", "weekly", 4usize, "2019-12-30_1807");
+        let fs_snaps = get_snaps();
+        let fs_orig = str2fs("tank/SRV/www\t245643\t-\t-\t121212112", FsType::Filesystem);
+        let expendables = zfs.find_expendable_snapshots(&fs_orig, &fs_snaps);
+
+        assert!(expendables.is_empty());
+    }
+
+    #[allow(dead_code)]
+    fn get_snaps() -> Vec<FS> {
+        vec![
+            str2fs(
+                "tank/SRV/www@zfs-snapshot_weekly-2019-12-30_1207\t23234\t-\t-\t1608216421",
+                FsType::Snapshot,
+            ),
+            str2fs(
+                "tank/SRV/www@zfs-snapshot_weekly-2019-12-30_1907\t245643\t-\t-\t1608216921",
+                FsType::Snapshot,
+            ),
+            str2fs(
+                "tank/SRV/www@zfs-snapshot_weekly-2019-12-30_1607\t12340\t-\t-\t1608216821",
+                FsType::Snapshot,
+            ),
+        ]
+    }
 }
