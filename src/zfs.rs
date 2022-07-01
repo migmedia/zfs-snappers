@@ -148,7 +148,7 @@ impl Zfs {
             "-t",
             fst.as_str(),
         ];
-        info!("zfs {}", args.join(" "));
+        debug!("zfs {}", args.join(" "));
         let ret = self
             .cmd()
             .args(&args)

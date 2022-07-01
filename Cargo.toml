@@ -1,17 +1,17 @@
 [package]
-name = "zfs-autosnaprs"
-version = "0.3.0"
+name = "zfs-snappers"
+version = "0.3.1"
 authors = ["Micha Glave <coding@migmedia.de>"]
 edition = "2021"
-description = "zfs-auto-snapshot tool written in Rust."
+description = "ZFS snapshot handling util."
 license = "MIT"
 
 [dependencies]
-simplelog = "0.12.0"
-clap = { version = "3.2.4", features = ["derive"] }
-log = "0.4.17"
 chrono = "0.4.19"
+clap = { version = "3.2.8", features = ["derive"] }
+log = "0.4.17"
+simplelog = "0.12.0"
 
 [[bin]]
-name = "zfs-autosnaprs"
+name = "zfs-snappers"
 path = "src/main.rs"

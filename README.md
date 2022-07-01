@@ -1,6 +1,6 @@
-# zfs-autosnaprs
+# zfs-snappers
 
-A zfs-auto-snapshot like tool written in Rust.
+A ZFS snapshot handling util. A in rust written alternative to zfs-auto-snapshot.
 
 ### Work in Progress
 Status:
@@ -10,11 +10,11 @@ Status:
 - finds expendable snapshots and destroys they.
 
 ```text
-zfs-autosnaprs 0.3.0
-zfs-auto-snapshot tool written in Rust.
+zfs-snappers 0.3.1
+ZFS snapshot handling util.
 
 USAGE:
-    zfs-autosnaprs [OPTIONS] <LABEL>
+    zfs-snappers [OPTIONS] <LABEL>
 
 ARGS:
     <LABEL>    Label of snapshot usually 'hourly', 'daily', or 'monthly'
@@ -25,7 +25,7 @@ OPTIONS:
     -m, --min-size <MIN_SIZE>    Min size in Kilo-Byte [default: 0]
     -n, --dry-run                Pretending, not really changing anything
     -N, --keep <NUM>             Keeps NUM recent snapshots and destroy older snapshots [default: 8]
-    -p, --prefix <PREFIX>        Prefix of snapshots [default: zfs-snapshot]
+    -p, --prefix <PREFIX>        Prefix of snapshots [default: zfs-snappers]
     -v, --verbose                Prints info messages
     -V, --version                Print version information
 ```

@@ -1,4 +1,4 @@
-///! # zfs-autosnaprs
+///! # zfs-snappers
 ///! A zfs-auto-snapshot like tool written in Rust.
 ///!
 ///! License: MIT
@@ -34,7 +34,7 @@ struct Opt {
     pub keep: usize,
 
     /// Prefix of snapshots.
-    #[clap(short, long, default_value = "zfs-snapshot")]
+    #[clap(short, long, default_value = "zfs-snappers")]
     pub prefix: String,
 
     /// Pretending, not really changing anything.
