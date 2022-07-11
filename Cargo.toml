@@ -1,6 +1,6 @@
 [package]
 name = "zfs-snappers"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Micha Glave <coding@migmedia.de>"]
 edition = "2021"
 description = "ZFS snapshot handling util."

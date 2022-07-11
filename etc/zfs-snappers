@@ -1,0 +1,8 @@
+#MAILTO=root@localhost
+
+# zfs-snappers cron job
+# min hour dom month dow command
+ 04    *    *   *     *  /usr/bin/zfs-snappers hourly
+ 03    0    *   *     *  /usr/bin/zfs-snappers daily
+ 02    0    *   *     1  /usr/bin/zfs-snappers weekly
+ 01    0    1   *     *  /usr/bin/zfs-snappers monthly

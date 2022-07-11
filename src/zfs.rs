@@ -124,7 +124,7 @@ impl Zfs {
     pub fn next_snapshot_needed<'a>(&'a self, min_size: usize, fs: &FS, snaps: &'a [FS]) -> bool {
         let snaps = self.filter_snaps(fs, snaps);
         match snaps.last() {
-            Some(&fs) => fs.written > min_size,
+            Some(&fs) => fs.written >= min_size,
             None => true,
         }
     }
